@@ -1,0 +1,32 @@
+# Object files
+*.o
+
+# Backup files
+*~
+*.orig
+
+# Generated files
+
+# Libraries
+*.lib
+*.a
+
+# Shared objects (inc. Windows DLLs)
+*.dll
+*.so
+*.so.*
+*.dylib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# Excluded Eclipse generated files
+**/.project
+**/.cproject
+**/.settings/
+
+# Excluded binaries
+client/glivec
+server/glives

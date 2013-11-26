@@ -1,0 +1,69 @@
+glive - a Gstreamer-based Live Example
+RTP/RTCP video server and client
+
+(C) John Weber (rjohnweber@gmail.com)
+Avnet Electronics Marketing
+
+This example program shows how to use the Gstreamer library to 
+create an RTP/RTCP video streamer on i.MX6 boards, though it 
+could easily be used on other platforms by changing some of the
+elements used for capture, encode, decode, and playback.
+
+They makes use of a TCP socket to control the link.
+
+Configuration of the port values used for RTP, RTCP send/recieve,
+and the server socket port are established through a configuration
+file (.cfg).
+
+The program is licensed with the GNU Public License, version 2.
+
+Hardware Dependencies:
+Server:
+  Freescale i.MX6-based board
+  Image sensor connected to and working on CSI
+Client:
+  x86 host
+  - or -
+  i.MX6-based board with LCD or HDMI monitor connected
+
+Software Dependencies:
+  Gstreamer-0.10
+  gst-fsl-plugins (mfw_v4lsrc, vpuenc)
+  For x86 clients, it uses the ffdec_h264, ffmpegcolorspace, and
+  autovideosink elements
+  For i.MX6 clients, it uses vpudec and mfw_v4lsink
+
+To build the videoserver:
+  Make sure that a cross toolchain is configured in your path.
+
+> cd server
+> export CROSS_COMPILE = <cross compiler prefix will end with a dash '-'>
+> make
+
+To build the client:
+
+> cd client
+> CROSS_COMPILE = <cross compiler prefix - will end with a dash '-'>
+> make
+
+Copy the binaries to the target filesystem:
+  
+To videoserver target filesystem:
+  server/glives
+  
+To videoclient target filesystem:
+  client/glivec
+
+Start server (on target):
+> glives
+
+Start client (on target):
+> glivec -s <IP address of server>
+
+The client should connect to the server automatically.
+
+TODO:
+* Build a better makefile for the whole project
+
+
+
