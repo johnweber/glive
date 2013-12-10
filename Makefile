@@ -6,6 +6,7 @@ SRCS =  link.c
 CLIENT = glive-client
 SERVER = glive-server
 OBJS = $(SRCS:.c*=.o)
+PREFIX ?= /usr/bin
 
 # Target Cross Tools
 CC ?= $(CROSS_COMPILE)gcc
