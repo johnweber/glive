@@ -38,8 +38,8 @@
 #include <fcntl.h>			/* For open() */
 #include <unistd.h>   		/* For read() */
 #include <ctype.h>    		/* For toupper() */
-#include <common.h>
-#include <link.h>
+#include "common.h"
+#include "link.h"
 #include <linux/kd.h>
 
 

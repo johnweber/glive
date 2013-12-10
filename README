@@ -11,10 +11,6 @@ elements used for capture, encode, decode, and playback.
 
 They makes use of a TCP socket to control the link.
 
-Configuration of the port values used for RTP, RTCP send/recieve,
-and the server socket port are established through a configuration
-file (.cfg).
-
 The program is licensed with the GNU Public License, version 2.
 
 Hardware Dependencies:
@@ -33,37 +29,21 @@ Software Dependencies:
   autovideosink elements
   For i.MX6 clients, it uses vpudec and mfw_v4lsink
 
-To build the videoserver:
-  Make sure that a cross toolchain is configured in your path.
+To build:
 
-> cd server
+1) Make sure that a cross toolchain is configured in your path.
+
 > export CROSS_COMPILE = <cross compiler prefix will end with a dash '-'>
 > make
 
-To build the client:
-
-> cd client
-> CROSS_COMPILE = <cross compiler prefix - will end with a dash '-'>
-> make
-
-Copy the binaries to the target filesystem:
+Copy the binaries to the target filesystem using your preferred method.
+(e.g. ftp, scp, copying to SDcard)
   
-To videoserver target filesystem:
-  server/glives
-  
-To videoclient target filesystem:
-  client/glivec
-
 Start server (on target):
-> glives
+> glive-server
 
-Start client (on target):
-> glivec -s <IP address of server>
+Start client (on target or host):
+> glive-client -s <IP address of server>
 
 The client should connect to the server automatically.
-
-TODO:
-* Build a better makefile for the whole project
-
-
 

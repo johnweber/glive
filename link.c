@@ -23,7 +23,7 @@
 #define _GNU_SOURCE
 #endif
 
-#include <common.h>
+#include "common.h"
 #include "link.h"
 #include <stdio.h>
 #include <string.h>

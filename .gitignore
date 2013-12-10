@@ -28,5 +28,5 @@
 **/.settings/
 
 # Excluded binaries
-client/glivec
-server/glives
+glive-client
+glive-server
