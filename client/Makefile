@@ -9,7 +9,7 @@ OUTNAME = glivec
 OBJS = $(SRCS:.c*=.o)
 
 # Target Cross Tools
-CC = $(CROSS_COMPILE)gcc
+CC ?= $(CROSS_COMPILE)gcc
 PKG_CFG_STRING=$(shell pkg-config --cflags --libs gstreamer-0.10)
 
 CFLAGS += -Wall -I$(INCLUDEDIR)
