@@ -23,6 +23,7 @@
 #endif
 
 #include <gst/gst.h>
+#include <gst/rtsp-server/rtsp-server.h>
 #include <glib.h>
 #include <signal.h>
 #include <string.h>
@@ -675,6 +676,58 @@ int vs_mainloop(vs_data* data) {
 	return 0;
 }
 
+static gboolean
+vs_rtsp_timeout (GstRTSPServer * server, gboolean ignored)
+{
+  GstRTSPSessionPool *pool;
+
+  pool = gst_rtsp_server_get_session_pool (server);
+  gst_rtsp_session_pool_cleanup (pool);
+  g_object_unref (pool);
+
+  return TRUE;
+}
+
+
+int vs_rtsp_mainloop(vs_data* data) {
+
+	GMainLoop *loop;
+	GstRTSPServer *server;
+	GstRTSPMediaMapping *mapping;
+	GstRTSPMediaFactory *factory;
+
+	loop = g_main_loop_new(NULL, FALSE);
+	server = gst_rtsp_server_new();
+	mapping = gst_rtsp_server_get_media_mapping(server);
+	factory = gst_rtsp_media_factory_new();
+
+	/* TODO: Make this command line customizable, setting the enc bitrate for example */
+	gst_rtsp_media_factory_set_launch(factory,
+			"( mfw_v4lsrc capture-mode=4 ! vpuenc codec=6 bitrate=3000000 ! rtph264pay name=pay0 pt=96 )");
+
+	gst_rtsp_media_factory_set_shared(factory, TRUE);
+	gst_rtsp_media_mapping_add_factory(mapping, "/camera", factory);
+	g_object_unref(mapping);
+
+	/* attach the server to the default main context */
+	if (gst_rtsp_server_attach(server, NULL ) == 0)
+		goto failed;
+
+	/* add a timeout for the session cleanup */
+	g_timeout_add_seconds(2, (GSourceFunc) vs_rtsp_timeout, server);
+
+	/* start serving, this never stops */
+	g_print ("stream ready at rtsp://<THIS IP ADDRESS>:8554/camera\n");
+	g_main_loop_run(loop);
+
+	return 0;
+
+	failed: {
+		g_print("RTSP: Failed to attach the server\n");
+		return -1;
+	}
+}
+
 /*******************************************************************************
  Main
  *******************************************************************************/
@@ -683,9 +736,10 @@ int main(int argc, char *argv[]) {
 	int opt;
 	int daemonize = 0;
 	int quiet = 0;
+	int rtsp = 0;
 
 	/* Parse command line */
-	while ((opt = getopt(argc, argv, "dqh")) != -1) {
+	while ((opt = getopt(argc, argv, "dqrh")) != -1) {
 		switch (opt) {
 		case 'd':
 			/* Daemonize - do not open /dev/stdin */
@@ -695,10 +749,15 @@ int main(int argc, char *argv[]) {
 			/* Quiet - do not print startup messages */
 			quiet = 1;
 			break;
+		case 'r':
+			/* RTSP server mode */
+			rtsp = 1;
+			break;
 		case 'h':
 			printf("Usage: %s [-dqh]\n", argv[0]);
 			printf("  d: Daemonize mode.  Do not open stdin for input.\n"
 				   "  q: Quiet: Do not print copyright information.\n"
+				   "  r: RTSP: Run RTSP server on standard port.\n"
 				   "  h: Help: print this message\n");
 			break;
 		default: /* '?' */
@@ -721,16 +780,24 @@ int main(int argc, char *argv[]) {
 	app_data.cfg.encode_bitrate = DEFAULT_BITRATE;
 	app_data.cfg.server_port    = DEFAULT_SERVER_PORT;
 
-	printf("Server port:    %d\n"
-			"Sending RTP data on port:    %d\n"
-			"Sending RTCP data on port:   %d\n"
-			"Expecting RTCP data on port: %d\n"
-			"Video encode bit rate:       %lld\n",
-			app_data.cfg.server_port,
-			app_data.cfg.rtp_send_port,
-			app_data.cfg.rtcp_send_port,
-			app_data.cfg.rtcp_recv_port,
-			app_data.cfg.encode_bitrate);
+	if(!rtsp){
+		printf("Mode: RTP/RTCP with control link.\n");
+		printf("Server port:    %d\n"
+				"Sending RTP data on port:    %d\n"
+				"Sending RTCP data on port:   %d\n"
+				"Expecting RTCP data on port: %d\n"
+				"Video encode bit rate:       %lld\n",
+				app_data.cfg.server_port,
+				app_data.cfg.rtp_send_port,
+				app_data.cfg.rtcp_send_port,
+				app_data.cfg.rtcp_recv_port,
+				app_data.cfg.encode_bitrate);
+	}
+	else {
+		printf("Mode: RTSP on standard port (8554).\n");
+		printf("Video encode bit rate:       %lld\n",
+				app_data.cfg.encode_bitrate);
+	}
 
 	/* Setup the file descriptors for polling, starting with /dev/stdin */
 	if(!daemonize){
@@ -742,27 +809,34 @@ int main(int argc, char *argv[]) {
 		app_data.fds[FD_INDEX_STDIN].events = POLLIN;
 	}
 	else
-		printf("Starting videoserver in background.\n");
+		printf("Starting glive server in background.\n");
 
-	if (vs_start_server(&app_data) != 0) {
-		printf("Error opening server socket\n");
-		return -1;
+	if(!rtsp){
+		if (vs_start_server(&app_data) != 0) {
+			printf("Error opening server socket\n");
+			return -1;
+		}
+
+		/* Gstreamer initialization */
+		gst_init(&argc, &argv);
+
+		/* Install interrupt handler */
+		vs_sigint_setup();
+
+		/* Main Loop */
+		g_print("Running...\n");
+
+		vs_mainloop(&app_data);
+
+		/* Out of the main loop, clean up nicely */
+		g_print("Returned, stopping playback\n");
+
+		return vs_cleanup(&app_data);
 	}
 
-	/* Gstreamer initialization */
+	/* RTSP loop */
 	gst_init(&argc, &argv);
 
-	/* Install interrupt handler */
-	vs_sigint_setup();
-
-	/* Main Loop */
-	g_print("Running...\n");
-
-	vs_mainloop(&app_data);
-
-	/* Out of the main loop, clean up nicely */
-	g_print("Returned, stopping playback\n");
-
-	return vs_cleanup(&app_data);
+	return vs_rtsp_mainloop(&app_data);
 
 }
