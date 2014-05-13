@@ -10,7 +10,7 @@ PREFIX ?= /usr/bin
 
 # Target Cross Tools
 CC ?= $(CROSS_COMPILE)gcc
-PKG_CFG_STRING=$(shell pkg-config --cflags --libs gstreamer-0.10)
+PKG_CFG_STRING=$(shell pkg-config --cflags --libs gstreamer-0.10 gst-rtsp-server-0.10)
 
 CFLAGS += -Wall
 
