@@ -4,6 +4,7 @@
 
 SRCS =  link.c
 CLIENT = glive-client
+RTSP_CLIENT = glive-rtsp-client
 SERVER = glive-server
 OBJS = $(SRCS:.c*=.o)
 PREFIX ?= /usr/bin
@@ -16,16 +17,19 @@ CFLAGS += -Wall
 
 # Debugging
 ifdef DEBUG
-CFLAGS += -DDEBUG -O0 -g
+CFLAGS += -DDEBUG -DGST_DEBUG=3 -O0 -g
 endif
 
-all: $(SERVER) $(CLIENT)
+all: $(SERVER) $(CLIENT) $(RTSP_CLIENT)
 	
 $(SERVER) : $(OBJS) Makefile glive-server.c
 	$(CC) $(CFLAGS) $(SRCS) glive-server.c -o $(SERVER) $(PKG_CFG_STRING) $(LDFLAGS)
 
 $(CLIENT) : $(OBJS) Makefile glive-client.c
 	$(CC) $(CFLAGS) $(SRCS) glive-client.c -o $(CLIENT) $(PKG_CFG_STRING) $(LDFLAGS)
+
+$(RTSP_CLIENT) : $(OBJS) Makefile glive-rtsp-client.c
+	$(CC) $(CFLAGS) $(SRCS) glive-rtsp-client.c -o $(RTSP_CLIENT) $(PKG_CFG_STRING) $(LDFLAGS)
 
 .PHONY : install clean
 
@@ -34,4 +38,4 @@ install:
 	install -m 0755 $(SERVER) $(DESTDIR)$(PREFIX)
 	install -m 0755 $(CLIENT) $(DESTDIR)$(PREFIX)
 clean:
-	@rm -f $(SERVER) $(CLIENT) *.o
+	@rm -f $(SERVER) $(CLIENT) $(RTSP_CLIENT) *.o
