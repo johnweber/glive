@@ -1,15 +1,13 @@
 glive - a Gstreamer-based Live Example
-RTP/RTCP video server and client
+RTSP Video Server
 
 (C) John Weber (rjohnweber@gmail.com)
 Avnet Electronics Marketing
 
 This example program shows how to use the Gstreamer library to 
-create an RTP/RTCP video streamer on i.MX6 boards, though it 
-could easily be used on other platforms by changing some of the
-elements used for capture, encode, decode, and playback.
-
-They makes use of a TCP socket to control the link.
+create an RTSP video streamer on i.MX6 boards, though it 
+could easily be used on other platforms by changing the
+launch string.
 
 The program is licensed with the GNU Public License, version 2.
 
@@ -18,18 +16,13 @@ Server:
   Freescale i.MX6-based board
   Image sensor connected to and working on CSI
 Client:
-  x86 host
-  - or -
-  i.MX6-based board with LCD or HDMI monitor connected
-  - or, in the case the server is configured for RTSP mode -
-  Any RTSP client program (e.g. VLC)
+  Any RTSP client program (e.g. VLC, gstreamer with rtspsrc)
 
 Software Dependencies:
-  Gstreamer-0.10
+  Gstreamer-0.10 or Gstreamer1.0
   gst-fsl-plugins (mfw_v4lsrc, vpuenc)
   For x86 clients, it uses the ffdec_h264, ffmpegcolorspace, and
   autovideosink elements
-  For i.MX6 clients, it uses vpudec and mfw_v4lsink
   gst-rtsp-server
 
 To build:
@@ -42,16 +35,8 @@ To build:
 Copy the binaries to the target filesystem using your preferred method.
 (e.g. ftp, scp, copying to SDcard)
   
-Start server, in normal RTP/RTCP mode (on target):
-> glive-server
-
-Start client (on target or host):
-> glive-client -s <IP address of server>
-
-The client should connect to the server automatically.
-
 Start server in RTSP mode:
-> glive-server -r
+> glive-server
 
 then, open an RTSP client program and direct it to the correct URI:
 http://<IP address>:8554/camera
