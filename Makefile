@@ -3,17 +3,18 @@
 #
 
 SRCS =  link.c
-CLIENT = glive-client
-RTSP_CLIENT = glive-rtsp-client
 SERVER = glive-server
 OBJS = $(SRCS:.c*=.o)
 PREFIX ?= /usr/bin
 
 # Target Cross Tools
 CC ?= $(CROSS_COMPILE)gcc
-GST_VERSION ?= "0.10"
 
-PKG_CFG_STRING=$(shell pkg-config --cflags --libs gstreamer-$(GST_VERSION) gst-rtsp-server-$(GST_VERSION))
+ifdef GST0.10
+PKG_CFG_STRING = $(shell pkg-config --cflags --libs gstreamer-0.10 gst-rtsp-server-0.10)
+else
+PKG_CFG_STRING = $(shell pkg-config --cflags --libs gstreamer-1.0 gstreamer-rtsp-server-1.0)
+endif
 
 CFLAGS += -Wall
 
@@ -22,22 +23,15 @@ ifdef DEBUG
 CFLAGS += -DDEBUG -DGST_DEBUG=3 -O0 -g
 endif
 
-all: $(SERVER) $(CLIENT) $(RTSP_CLIENT)
+all: $(SERVER)
 	
 $(SERVER) : $(OBJS) Makefile glive-server.c
 	$(CC) $(CFLAGS) $(SRCS) glive-server.c -o $(SERVER) $(PKG_CFG_STRING) $(LDFLAGS)
-
-$(CLIENT) : $(OBJS) Makefile glive-client.c
-	$(CC) $(CFLAGS) $(SRCS) glive-client.c -o $(CLIENT) $(PKG_CFG_STRING) $(LDFLAGS)
-
-$(RTSP_CLIENT) : $(OBJS) Makefile glive-rtsp-client.c
-	$(CC) $(CFLAGS) $(SRCS) glive-rtsp-client.c -o $(RTSP_CLIENT) $(PKG_CFG_STRING) $(LDFLAGS)
 
 .PHONY : install clean
 
 install:
 	install -d $(DESTDIR)$(PREFIX)
 	install -m 0755 $(SERVER) $(DESTDIR)$(PREFIX)
-	install -m 0755 $(CLIENT) $(DESTDIR)$(PREFIX)
 clean:
-	@rm -f $(SERVER) $(CLIENT) $(RTSP_CLIENT) *.o
+	@rm -f $(SERVER)  *.o
