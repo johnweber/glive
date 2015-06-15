@@ -2,7 +2,7 @@
 # Makefile
 #
 
-SRCS =  link.c
+SRCS =  glive-server.c
 SERVER = glive-server
 OBJS = $(SRCS:.c*=.o)
 PREFIX ?= /usr/bin
@@ -25,8 +25,8 @@ endif
 
 all: $(SERVER)
 	
-$(SERVER) : $(OBJS) Makefile glive-server.c
-	$(CC) $(CFLAGS) $(SRCS) glive-server.c -o $(SERVER) $(PKG_CFG_STRING) $(LDFLAGS)
+$(SERVER) : $(OBJS) Makefile $(SRCS)
+	$(CC) $(CFLAGS) $(SRCS) -o $(SERVER) $(PKG_CFG_STRING) $(LDFLAGS)
 
 .PHONY : install clean
 
