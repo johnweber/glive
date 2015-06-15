@@ -29,6 +29,7 @@
 #include <string.h>
 #include <stropts.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -36,9 +37,17 @@
 #include <netinet/in.h>
 
 /* Defaults */
-#define DEFAULT_LAUNCH_IMX6  "( mfw_v4l2src capture-mode=4 ! vpuenc codec=6 bitrate=3000000 ! rtph264pay name=pay0 pt=96 )"
+#define DEFAULT_LAUNCH_IMX6  "( imxv4l2src ! video/x-raw,format=I420,width=1280,height=720,framerate=30/1 ! vpuenc bitrate=2000000 ! rtph264pay name=pay0 pt=96 )"
 #define DEFAULT_LAUNCH_PC "( v4l2src ! x264enc bitrate=1000 ! rtph264pay name=pay0 pt=96 )"
 #define DEFAULT_SERVER_PORT 8554
+
+#define STR(s) #s
+#define XSTR(s) STR(s)
+#pragma message "Gstreamer Version=" XSTR(GST_VERSION_MAJOR) "." XSTR(GST_VERSION_MINOR) "." XSTR(GST_VERSION_MICRO)
+
+#if GST_VERSION_MAJOR >= 1
+#define GSTREAMER1_0
+#endif
 
 #define LS_BUFSIZE 512
 
@@ -76,12 +85,32 @@ int vs_rtsp_mainloop(vs_cfg_data* cfg) {
 
 	GMainLoop *loop;
 	GstRTSPServer *server;
+
+#ifdef GSTREAMER1_0
+	// Use GstRTSPMountPoints for Gstreamer 1.0
+	GstRTSPMountPoints *mountpoints;
+#else
+	// Use this for Gstreamer < 1.0
 	GstRTSPMediaMapping *mapping;
+#endif
+
 	GstRTSPMediaFactory *factory;
 
 	loop = g_main_loop_new(NULL, FALSE);
 	server = gst_rtsp_server_new();
+
+	// Set the server port
+	char port_string[30];
+	sprintf(port_string, "%d", cfg->server_port);
+	gst_rtsp_server_set_service(server, port_string);
+
+#ifdef GSTREAMER1_0
+	// Note: Gstreamer 1.0 (and greater) renamed the 'mapping' to 'mount_points'
+	mountpoints = gst_rtsp_server_get_mount_points(server);
+#else
 	mapping = gst_rtsp_server_get_media_mapping(server);
+#endif
+
 	factory = gst_rtsp_media_factory_new();
 
 	/* If we are ARM architecture, then assume that we are an i.MX processor and build
@@ -101,13 +130,18 @@ int vs_rtsp_mainloop(vs_cfg_data* cfg) {
 	}
 
 	printf( "Setting RTSP pipeline to: \n   %s\n", cfg->launch_string);
-	gst_rtsp_media_factory_set_launch(factory,
-		cfg->launch_string);					
+	gst_rtsp_media_factory_set_launch(factory, cfg->launch_string);
 
 	/* TODO: Add ability to change server port */
 	gst_rtsp_media_factory_set_shared(factory, TRUE);
+
+#ifdef GSTREAMER1_0
+	gst_rtsp_mount_points_add_factory(mountpoints, "/camera", factory);
+	g_object_unref(mountpoints);
+#else
 	gst_rtsp_media_mapping_add_factory(mapping, "/camera", factory);
 	g_object_unref(mapping);
+#endif
 
 	/* attach the server to the default main context */
 	if (gst_rtsp_server_attach(server, NULL ) == 0)
@@ -117,7 +151,7 @@ int vs_rtsp_mainloop(vs_cfg_data* cfg) {
 	g_timeout_add_seconds(2, (GSourceFunc) vs_rtsp_timeout, server);
 
 	/* start serving, this never stops */
-	g_print ("Stream ready at rtsp://<THIS IP ADDRESS>:8554/camera\n");
+	g_print ("Stream ready at rtsp://<THIS IP ADDRESS>:%d/camera\n",cfg->server_port);
 	g_main_loop_run(loop);
 
 	return 0;
@@ -140,8 +174,11 @@ int main(int argc, char *argv[]) {
 	vs_init_data(&cfg_data);
 	cfg_data.launch_string = malloc(LS_BUFSIZE+1);
 
+	/* Initialize configuration */
+	cfg_data.server_port = DEFAULT_SERVER_PORT;
+
 	/* Parse command line */
-	while ((opt = getopt(argc, argv, "dqrhl:")) != -1) {
+	while ((opt = getopt(argc, argv, "dqrhl:p:")) != -1) {
 		switch (opt) {
 		case 'q':
 			/* Quiet - do not print startup messages */
@@ -156,6 +193,11 @@ int main(int argc, char *argv[]) {
 		case 'l':
 			if(optarg)
 				sprintf(cfg_data.launch_string,"( %s )", optarg);
+			break;
+		case 'p':
+			if(optarg)
+				sscanf(optarg,"%d",&cfg_data.server_port);
+			break;
 		default: /* '?' */
 			break;
 		}
@@ -166,8 +208,6 @@ int main(int argc, char *argv[]) {
 			"(C) John Weber, Avnet Electronics Marketing\n");
 	}	
 
-	/* Initialize configuration */
-	cfg_data.server_port = DEFAULT_SERVER_PORT;
 	printf("Mode: RTSP on port %d.\n", cfg_data.server_port);
 	
 	/* RTSP loop */
