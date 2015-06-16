@@ -54,6 +54,12 @@
 #define DEFAULT_LAUNCH_THERMAL "( v4l2src device=/dev/video1 ! ffmpegcolorspace ! vpuenc codec=6 bitrate=1000000 ! rtph264pay name=pay0 pt=96 )"
 #endif
 
+#ifdef GSTREAMER1_0
+#define DEFAULT_LAUNCH_FTF "( imxv4l2src ! video/x-raw,format=I420,framerate=30/1,width=640,height=480 ! \
+videomixer name=mix sink_0::alpha=1.0 sink_1::alpha=1.0 ! imxvpuenc_h264 bitrate=2000 ! rtph264pay name=pay0 pt=96 \
+v4l2src device=/dev/video1 ! mix. )"
+#endif
+
 #define DEFAULT_LAUNCH_PC "( v4l2src ! x264enc bitrate=1000 ! rtph264pay name=pay0 pt=96 )"
 #define DEFAULT_SERVER_PORT 8554
 
@@ -65,6 +71,7 @@ typedef struct _vs_cfg_data {
 	int server_port;
 	char * launch_string;
 	int dual_mode;
+	int ftf_demo_mode;
 } vs_cfg_data;
 
 /* Global data */
@@ -149,6 +156,12 @@ int vs_rtsp_mainloop(vs_cfg_data* cfg) {
 		printf( "Setting visible camera RTSP pipeline to: \n   %s\n", DEFAULT_LAUNCH_IMX6);
 		gst_rtsp_media_factory_set_launch(factory, DEFAULT_LAUNCH_IMX6);
 	}
+#ifdef GSTREAMER1_0
+	else if (cfg->ftf_demo_mode) {
+		printf( "Setting camera RTSP pipeline to: \n   %s\n", DEFAULT_LAUNCH_FTF);
+		gst_rtsp_media_factory_set_launch(factory, DEFAULT_LAUNCH_FTF);
+	}
+#endif
 	else {
 		printf( "Setting visible camera RTSP pipeline to: \n   %s\n", cfg->launch_string);
 		gst_rtsp_media_factory_set_launch(factory, cfg->launch_string);
@@ -205,9 +218,10 @@ int main(int argc, char *argv[]) {
 	/* Initialize configuration */
 	cfg_data.server_port = DEFAULT_SERVER_PORT;
 	cfg_data.dual_mode = 0;
+	cfg_data.ftf_demo_mode = 0;
 
 	/* Parse command line */
-	while ((opt = getopt(argc, argv, "qhdl:p:")) != -1) {
+	while ((opt = getopt(argc, argv, "qhdfl:p:")) != -1) {
 		switch (opt) {
 		case 'q':
 			/* Quiet - do not print startup messages */
@@ -227,6 +241,9 @@ int main(int argc, char *argv[]) {
 			if(optarg)
 				sprintf(cfg_data.launch_string,"( %s )", optarg);
 			break;
+		case 'f':  // FTF Demo mode
+			cfg_data.ftf_demo_mode = 1;
+			break;
 		case 'p':
 			if(optarg)
 				sscanf(optarg,"%d",&cfg_data.server_port);
@@ -236,6 +253,8 @@ int main(int argc, char *argv[]) {
 		}
 	}
 	
+	if(cfg_data.ftf_demo_mode) cfg_data.dual_mode  = 0;  // FTF mode trumps dual mode.
+
 	if(!quiet){
 		printf("glive-server - Gstreamer RTSP Server \n"
 			"(C) John Weber, Avnet Electronics Marketing\n");
