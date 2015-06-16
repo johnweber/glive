@@ -36,10 +36,6 @@
 #include <sys/timerfd.h> /* For timerfd functions */
 #include <netinet/in.h>
 
-/* Defaults */
-#define DEFAULT_LAUNCH_IMX6  "( imxv4l2src ! video/x-raw,format=I420,width=1280,height=720,framerate=30/1 ! vpuenc bitrate=2000000 ! rtph264pay name=pay0 pt=96 )"
-#define DEFAULT_LAUNCH_PC "( v4l2src ! x264enc bitrate=1000 ! rtph264pay name=pay0 pt=96 )"
-#define DEFAULT_SERVER_PORT 8554
 
 #define STR(s) #s
 #define XSTR(s) STR(s)
@@ -49,11 +45,26 @@
 #define GSTREAMER1_0
 #endif
 
+/* Defaults */
+#ifdef GSTREAMER1_0
+#define DEFAULT_LAUNCH_IMX6  "( imxv4l2src ! video/x-raw,format=I420,width=640,height=480,framerate=30/1 ! imxvpuenc_h264 bitrate=1000 ! rtph264pay name=pay0 pt=96 )"
+#define DEFAULT_LAUNCH_THERMAL "( v4l2src device=/dev/video1 ! videoconvert ! imxvpuenc_h264 bitrate=1000 ! rtph264pay name=pay0 pt=96 )"
+#else
+#define DEFAULT_LAUNCH_IMX6 "( imxv4l2src capture-mode=4 ! vpuenc codec=6 bitrate=1000000 ! rtph264pay name=pay0 pt=96 )"
+#define DEFAULT_LAUNCH_THERMAL "( v4l2src device=/dev/video1 ! ffmpegcolorspace ! vpuenc codec=6 bitrate=1000000 ! rtph264pay name=pay0 pt=96 )"
+#endif
+
+#define DEFAULT_LAUNCH_PC "( v4l2src ! x264enc bitrate=1000 ! rtph264pay name=pay0 pt=96 )"
+#define DEFAULT_SERVER_PORT 8554
+
+
+
 #define LS_BUFSIZE 512
 
 typedef struct _vs_cfg_data {
 	int server_port;
 	char * launch_string;
+	int dual_mode;
 } vs_cfg_data;
 
 /* Global data */
@@ -94,7 +105,7 @@ int vs_rtsp_mainloop(vs_cfg_data* cfg) {
 	GstRTSPMediaMapping *mapping;
 #endif
 
-	GstRTSPMediaFactory *factory;
+	GstRTSPMediaFactory *factory, *factory_thermal;
 
 	loop = g_main_loop_new(NULL, FALSE);
 	server = gst_rtsp_server_new();
@@ -113,6 +124,8 @@ int vs_rtsp_mainloop(vs_cfg_data* cfg) {
 
 	factory = gst_rtsp_media_factory_new();
 
+	factory_thermal = gst_rtsp_media_factory_new();
+
 	/* If we are ARM architecture, then assume that we are an i.MX processor and build
 	   the pipeline to decode and display using the i.MX plugins */
 #ifdef __arm__
@@ -122,24 +135,35 @@ int vs_rtsp_mainloop(vs_cfg_data* cfg) {
 #endif
 
 	/* Set up RTSP launch command */
-	if(!strlen(cfg->launch_string)) {
+	if(!strlen(cfg->launch_string) && (cfg->dual_mode == 0)) {
 		if (assume_imx)
 			strcpy(cfg->launch_string, DEFAULT_LAUNCH_IMX6);
 		else
 			strcpy(cfg->launch_string, DEFAULT_LAUNCH_PC);
 	}
 
-	printf( "Setting RTSP pipeline to: \n   %s\n", cfg->launch_string);
-	gst_rtsp_media_factory_set_launch(factory, cfg->launch_string);
+	if (cfg->dual_mode) {
+		printf( "Setting thermal camera RTSP pipeline to: \n   %s\n", DEFAULT_LAUNCH_THERMAL);
+		gst_rtsp_media_factory_set_launch(factory_thermal, DEFAULT_LAUNCH_THERMAL);
 
-	/* TODO: Add ability to change server port */
+		printf( "Setting visible camera RTSP pipeline to: \n   %s\n", DEFAULT_LAUNCH_IMX6);
+		gst_rtsp_media_factory_set_launch(factory, DEFAULT_LAUNCH_IMX6);
+	}
+	else {
+		printf( "Setting visible camera RTSP pipeline to: \n   %s\n", cfg->launch_string);
+		gst_rtsp_media_factory_set_launch(factory, cfg->launch_string);
+	}
+
 	gst_rtsp_media_factory_set_shared(factory, TRUE);
+	if(cfg->dual_mode) gst_rtsp_media_factory_set_shared(factory_thermal, TRUE);
 
 #ifdef GSTREAMER1_0
 	gst_rtsp_mount_points_add_factory(mountpoints, "/camera", factory);
+	if(cfg->dual_mode) gst_rtsp_mount_points_add_factory(mountpoints, "/thermal", factory_thermal);
 	g_object_unref(mountpoints);
 #else
 	gst_rtsp_media_mapping_add_factory(mapping, "/camera", factory);
+	if(cfg->dual_mode) gst_rtsp_media_mapping_add_factory(mapping, "/thermal", factory_thermal);
 	g_object_unref(mapping);
 #endif
 
@@ -151,7 +175,11 @@ int vs_rtsp_mainloop(vs_cfg_data* cfg) {
 	g_timeout_add_seconds(2, (GSourceFunc) vs_rtsp_timeout, server);
 
 	/* start serving, this never stops */
-	g_print ("Stream ready at rtsp://<THIS IP ADDRESS>:%d/camera\n",cfg->server_port);
+	if(cfg->dual_mode)
+		g_print ("Streams ready at rtsp://<THIS IP ADDRESS>:%d/camera and /thermal\n",cfg->server_port);
+	else
+		g_print ("Stream ready at rtsp://<THIS IP ADDRESS>:%d/camera\n",cfg->server_port);
+
 	g_main_loop_run(loop);
 
 	return 0;
@@ -176,9 +204,10 @@ int main(int argc, char *argv[]) {
 
 	/* Initialize configuration */
 	cfg_data.server_port = DEFAULT_SERVER_PORT;
+	cfg_data.dual_mode = 0;
 
 	/* Parse command line */
-	while ((opt = getopt(argc, argv, "dqrhl:p:")) != -1) {
+	while ((opt = getopt(argc, argv, "qhdl:p:")) != -1) {
 		switch (opt) {
 		case 'q':
 			/* Quiet - do not print startup messages */
@@ -188,7 +217,11 @@ int main(int argc, char *argv[]) {
 			printf("Usage: %s [-qhl <launch string>]\n", argv[0]);
 			printf("  -q: Quiet: Do not print copyright information\n"  
 			       "  -h: Help: print this message\n"
-			       "  -l <launch string>: launch string to use instead of default\n" );
+			       "  -l <launch string>: launch string to use instead of default\n"
+				   "  -p <number>: use this port number instead of the default (8554)");
+			break;
+		case 'd':
+			cfg_data.dual_mode = 1;  // Dual mode
 			break;
 		case 'l':
 			if(optarg)
